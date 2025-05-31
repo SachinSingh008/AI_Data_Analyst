@@ -1,0 +1,12 @@
+# Add your requirements here
+pandas
+numpy
+matplotlib
+seaborn
+plotly
+scikit-learn
+streamlit
+jinja2
+pdfkit
+google-generativeai
+statsmodels
