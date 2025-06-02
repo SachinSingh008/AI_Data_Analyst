@@ -1,5 +1,7 @@
 import streamlit as st
-from modules import data_loader, data_cleaner, analyzer, visualizer, report_generator
+import pandas as pd
+import io
+from modules import data_cleaner, analyzer, visualizer, report_generator
 
 # Set Streamlit to wide mode
 st.set_page_config(
@@ -8,7 +10,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Optional custom styling for padding
+# Optional custom styling
 def set_custom_styles():
     st.markdown("""
         <style>
@@ -22,26 +24,35 @@ def set_custom_styles():
 
 set_custom_styles()
 
-# App title and file upload
+# App title and file uploader
 st.title("AI Data Analyst")
-uploaded_file = st.file_uploader("Upload your CSV", type="csv")
+uploaded_file = st.file_uploader("Upload your Excel or CSV file", type=["csv", "xlsx", "xls"])
 
 if uploaded_file:
-    # Load and clean data
-    df = data_loader.load_data(uploaded_file)
+    # Load file based on extension
+    if uploaded_file.name.endswith('.csv'):
+        df = pd.read_csv(uploaded_file)
+    elif uploaded_file.name.endswith(('.xlsx', '.xls')):
+        df = pd.read_excel(uploaded_file)
+        # Convert Excel to CSV buffer (optional, for compatibility)
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False)
+        csv_buffer.seek(0)
+        uploaded_file = csv_buffer
+    else:
+        st.error("Unsupported file type!")
+        st.stop()
+
+    # Clean data
     df = data_cleaner.clean_data(df)
 
     st.subheader("Data Preview")
     st.dataframe(df)
 
-    # summary = analyzer.generate_summary(df)
-    # st.subheader("Summary Statistics")
-    # st.json(summary)
-
-    st.subheader("Visualizations")
-
     numeric_cols = df.select_dtypes(include='number').columns.tolist()
     categorical_cols = df.select_dtypes(include='object').columns.tolist()
+
+    st.subheader("Visualizations")
 
     # Histogram
     with st.expander("Histograms"):
@@ -96,7 +107,6 @@ if uploaded_file:
     # Report Generation Button
     if st.button("Generate Report"):
         context = {
-            # "summary": summary,
             "columns": list(df.columns),
             "rows": df.head(10).to_dict(orient='records')
         }
