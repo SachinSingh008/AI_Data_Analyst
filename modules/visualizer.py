@@ -31,17 +31,33 @@ def plot_histogram(df, column, bin_size=None):
     )
     return fig
 
-# 2. Pie Chart
 def plot_pie_chart(df, column):
+    value_counts = df[column].value_counts()
+    total = value_counts.sum()
+
+    # Separate major categories from minor ones
+    major_values = value_counts[value_counts / total >= 0.02]
+    minor_values = value_counts[value_counts / total < 0.02]
+
+    # Create a new series with "Others"
+    grouped_counts = major_values.copy()
+    if not minor_values.empty:
+        grouped_counts["Others"] = minor_values.sum()
+
+    grouped_df = grouped_counts.reset_index()
+    grouped_df.columns = [column, "count"]
+
     fig = px.pie(
-        df,
+        grouped_df,
         names=column,
-        title=f'Pie Chart of {column}',
+        values="count",
+        title=f'Pie Chart of {column} (Grouped <2% as "Others")',
         hole=0.4,
         template=PLOT_TEMPLATE,
         color_discrete_sequence=COLOR_SEQUENCE
     )
     return fig
+
 
 # 3. Box Plot
 def plot_box_plot(df, x_column, y_column):
