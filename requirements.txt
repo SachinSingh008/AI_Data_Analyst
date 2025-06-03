@@ -10,3 +10,4 @@ jinja2
 pdfkit
 google-generativeai
 statsmodels
+openpyxl
