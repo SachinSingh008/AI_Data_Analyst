@@ -46,9 +46,33 @@ if uploaded_file:
     # Clean data
     df = data_cleaner.clean_data(df)
 
-    st.subheader("Data Preview")
+    st.subheader("Data Selection")
+
+    # Row selection
+    row_options = ["10", "100", "1000", "10000", "All"]
+    selected_rows_option = st.selectbox("Select number of rows to load", row_options, index=0)
+    if selected_rows_option != "All":
+        df = df.head(int(selected_rows_option))
+
+    # Column selection
+    all_columns = df.columns.tolist()
+    selected_columns = st.multiselect(
+        "Select columns to display and analyze",
+        options=all_columns,
+        default=all_columns
+    )
+
+    # Filter based on column selection
+    if selected_columns:
+        df = df[selected_columns]
+    else:
+        st.warning("No columns selected. Please select at least one.")
+        st.stop()
+
+    st.subheader("Filtered Data Preview")
     st.dataframe(df)
 
+    # Update column lists after filtering
     numeric_cols = df.select_dtypes(include='number').columns.tolist()
     categorical_cols = df.select_dtypes(include='object').columns.tolist()
 

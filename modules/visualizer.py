@@ -62,8 +62,8 @@ def plot_line_graph(df, x_column, y_column):
     color_col = get_categorical_column(df)
     fig = px.line(
         df,
-        x=x_column,
-        y=y_column,
+        x=y_column,
+        y=x_column,
         color=color_col,
         title=f'Line Graph of {y_column} over {x_column}',
         markers=True,
