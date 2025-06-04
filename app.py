@@ -1,138 +1,102 @@
 import streamlit as st
-import pandas as pd
-import io
-from modules import data_cleaner, analyzer, visualizer, report_generator
+from modules import data_loader, data_cleaner, data_analyzer, data_visualizer, chart_suggester
 
-# Set Streamlit to wide mode
-st.set_page_config(
-    page_title="AI Data Analyst",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="AI Data Analyst", layout="wide", initial_sidebar_state="expanded")
+st.title("📊 AI Data Analyst App")
 
-# Optional custom styling
-def set_custom_styles():
-    st.markdown("""
-        <style>
-        .main {
-            max-width: 95%;
-            padding-left: 2rem;
-            padding-right: 2rem;
-        }
-        </style>
-    """, unsafe_allow_html=True)
+if 'user_charts' not in st.session_state:
+    st.session_state.user_charts = []
 
-set_custom_styles()
-
-# App title and file uploader
-st.title("AI Data Analyst")
-uploaded_file = st.file_uploader("Upload your Excel or CSV file", type=["csv", "xlsx", "xls"])
+uploaded_file = st.file_uploader("Upload your dataset (CSV, Excel, or JSON)", type=["csv", "xlsx", "json"])
 
 if uploaded_file:
-    # Load file based on extension
-    if uploaded_file.name.endswith('.csv'):
-        df = pd.read_csv(uploaded_file)
-    elif uploaded_file.name.endswith(('.xlsx', '.xls')):
-        df = pd.read_excel(uploaded_file)
-        # Convert Excel to CSV buffer (optional, for compatibility)
-        csv_buffer = io.StringIO()
-        df.to_csv(csv_buffer, index=False)
-        csv_buffer.seek(0)
-        uploaded_file = csv_buffer
-    else:
-        st.error("Unsupported file type!")
-        st.stop()
+    df = data_loader.load_data(uploaded_file)
+    if df is not None:
+        df = data_cleaner.clean_data(df)
 
-    # Clean data
-    df = data_cleaner.clean_data(df)
+        st.subheader("📋 Full Data Preview (First 100 Rows)")
+        st.dataframe(df.head(100), use_container_width=True)
 
-    st.subheader("Data Selection")
+        st.subheader("📈 Summary Statistics")
+        st.dataframe(data_analyzer.get_summary(df), use_container_width=True)
 
-    # Row selection
-    row_options = ["10", "100", "1000", "10000", "All"]
-    selected_rows_option = st.selectbox("Select number of rows to load", row_options, index=0)
-    if selected_rows_option != "All":
-        df = df.head(int(selected_rows_option))
+        # Row/column selection
+        st.subheader("🎯 Filter Data for Analysis")
+        row_option = st.selectbox("Select number of rows to analyze:", ["10", "100", "1000", "10000", "All"], index=2)
+        selected_columns = st.multiselect("Select columns to include:", options=df.columns.tolist(), default=df.columns.tolist())
+        if selected_columns:
+            df = df[selected_columns]
+        if row_option != "All":
+            df = df.head(int(row_option))
 
-    # Column selection
-    all_columns = df.columns.tolist()
-    selected_columns = st.multiselect(
-        "Select columns to display and analyze",
-        options=all_columns,
-        default=all_columns
-    )
+        st.dataframe(df, use_container_width=True)
 
-    # Filter based on column selection
-    if selected_columns:
-        df = df[selected_columns]
-    else:
-        st.warning("No columns selected. Please select at least one.")
-        st.stop()
+        # Correlation
+        st.subheader("🔗 Correlation Matrix")
+        st.plotly_chart(data_analyzer.plot_correlation(df), use_container_width=True)
 
-    st.subheader("Filtered Data Preview")
-    st.dataframe(df)
-
-    # Update column lists after filtering
-    numeric_cols = df.select_dtypes(include='number').columns.tolist()
-    categorical_cols = df.select_dtypes(include='object').columns.tolist()
-
-    st.subheader("Visualizations")
-
-    # Histogram
-    with st.expander("Histograms"):
-        cols = st.columns(3)
-        for i, col in enumerate(numeric_cols):
-            fig = visualizer.plot_histogram(df, col)
-            cols[i % 3].plotly_chart(fig, use_container_width=True)
-
-    # Pie Chart
-    with st.expander("Pie Charts"):
-        cols = st.columns(3)
-        for i, col in enumerate(categorical_cols):
-            fig = visualizer.plot_pie_chart(df, col)
-            cols[i % 3].plotly_chart(fig, use_container_width=True)
-
-    # Box Plot
-    with st.expander("Box Plots"):
-        cols = st.columns(3)
-        plot_index = 0
-        for num_col in numeric_cols:
-            for cat_col in categorical_cols:
-                fig = visualizer.plot_box_plot(df, cat_col, num_col)
-                cols[plot_index % 3].plotly_chart(fig, use_container_width=True)
-                plot_index += 1
-
-    # Line Graph
-    with st.expander("Line Graphs"):
-        if len(numeric_cols) >= 2:
-            x_col = numeric_cols[0]
+        # Recommended Charts
+        st.subheader("🤖 Recommended Charts")
+        suggestions = chart_suggester.suggest_charts(df)
+        for i in range(0, len(suggestions), 3):
             cols = st.columns(3)
-            for i, y_col in enumerate(numeric_cols[1:]):
-                fig = visualizer.plot_line_graph(df, x_col, y_col)
-                cols[i % 3].plotly_chart(fig, use_container_width=True)
+            for j in range(3):
+                if i + j < len(suggestions):
+                    s = suggestions[i + j]
+                    fig = data_visualizer.generate_chart(df, s["type"], s["x"], s.get("y"))
+                    cols[j].plotly_chart(fig, use_container_width=True)
 
-    # Heatmap
-    with st.expander("Correlation Heatmap"):
-        if len(numeric_cols) >= 2:
-            fig = visualizer.plot_heatmap(df)
-            st.plotly_chart(fig, use_container_width=True)
+        # User-created Charts (only after data is loaded)
+        if uploaded_file:
+            st.subheader("🎨 Create Your Own Charts")
 
-    # Scatter Plot
-    with st.expander("Scatter Plots"):
-        if len(numeric_cols) >= 2:
-            cols = st.columns(3)
-            plot_index = 0
-            for i in range(len(numeric_cols)):
-                for j in range(i + 1, len(numeric_cols)):
-                    fig = visualizer.plot_scatter_plot(df, numeric_cols[i], numeric_cols[j])
-                    cols[plot_index % 3].plotly_chart(fig, use_container_width=True)
-                    plot_index += 1
+            user_charts = st.session_state.user_charts
+            num_charts = len(user_charts)
 
-    # Report Generation Button
-    if st.button("Generate Report"):
-        context = {
-            "columns": list(df.columns),
-            "rows": df.head(10).to_dict(orient='records')
-        }
-        report_generator.generate_report(context)
-        st.success("Report generated!")
+            charts_per_row = 3
+            total_slots = num_charts + 1  # Extra for add chart button
+
+            for i in range(0, total_slots, charts_per_row):
+                cols = st.columns(3)
+                for j in range(3):
+                    slot_index = i + j
+                    if slot_index < num_charts:
+                        idx = slot_index
+                        chart = user_charts[idx]
+
+                        with cols[j]:
+                            # Toggle visibility
+                            is_expanded = chart.get("expanded", False)
+                            toggle = st.toggle(f"Chart #{idx+1} Settings", value=is_expanded, key=f"toggle_{idx}")
+                            st.session_state.user_charts[idx]["expanded"] = toggle
+
+                            if toggle:
+                                chart_type = st.selectbox("Chart Type", ["bar", "line", "scatter", "histogram", "pie"], key=f"type_{idx}")
+                                x = st.selectbox("X-axis", options=df.columns, index=0, key=f"x_{idx}")
+                                y = None
+                                if chart_type in ["bar", "line", "scatter"]:
+                                    y = st.selectbox("Y-axis", options=df.columns, index=0, key=f"y_{idx}")
+                                st.session_state.user_charts[idx].update({
+                                    "type": chart_type,
+                                    "x": x,
+                                    "y": y
+                                })
+
+                            chart_type = chart.get("type")
+                            x = chart.get("x")
+                            y = chart.get("y")
+                            if chart_type and x:
+                                fig = data_visualizer.generate_chart(df, chart_type, x, y)
+                                st.plotly_chart(fig, use_container_width=True)
+
+                            if st.button("🗑 Remove", key=f"remove_{idx}"):
+                                st.session_state.user_charts.pop(idx)
+                                st.experimental_rerun()
+
+                    elif slot_index == num_charts:
+                        with cols[j]:
+                            if st.button("➕ Add Chart"):
+                                st.session_state.user_charts.append({
+                                "type": "bar", "x": df.columns[0], "y": None, "expanded": True
+                                })
+                                st.rerun()  # <- use this instead of st.experimental_rerun()
